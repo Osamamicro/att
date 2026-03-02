@@ -1,0 +1,17 @@
+# Ignore Visual Studio user-specific and auto-generated files
+.vs/
+*.suo
+**/obj/
+**/obj/**
+**/bin/
+**/bin/**
+**/Debug/
+**/Debug/**
+**/Debug/**/*.compressed/
+**/.compressed/
+*.cache
+*.gz
+*.dll
+*.exe
+*.pdb
+*.json
