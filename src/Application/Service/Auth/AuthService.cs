@@ -4,6 +4,7 @@ using Domain.Repositories.Users;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -23,17 +24,20 @@ public class AuthService : IAuthService
     private readonly IUserRepository _userRepository;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
+    private readonly IHostEnvironment _environment;
 
     public AuthService(
         ILdapAuthService ldapAuthService,
         IUserRepository userRepository,
         IConfiguration configuration,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        IHostEnvironment environment)
     {
         _ldapAuthService = ldapAuthService;
         _userRepository = userRepository;
         _configuration = configuration;
         _logger = logger;
+        _environment = environment;
     }
 
     public async Task<Result<LoginResponseDto>> LoginAsync(LoginRequestDto request)
@@ -48,32 +52,53 @@ public class AuthService : IAuthService
             if (!IsValidEmail(request.Email))
                 return Result<LoginResponseDto>.Failure("Invalid email format");
 
-            // Check for existing user with password hash (development mode)
+            // Check for existing user in database
             var existingUser = await _userRepository.GetByEmailAsync(request.Email);
-            bool isAuthenticated = false;
 
-            if (existingUser != null && !string.IsNullOrEmpty(existingUser.PasswordHash))
+            // VMS Logic: If user exists in DB, check if they are active before proceeding
+            if (existingUser != null && !existingUser.IsActive)
             {
-                // Verify password hash (simple comparison for development)
-                isAuthenticated = VerifyPassword(request.Password, existingUser.PasswordHash);
+                _logger.LogWarning("Login attempt by inactive user {Email}", request.Email);
+                return Result<LoginResponseDto>.Failure("اسم المستخدم غير موجود أو غير نشط"); // User not found or inactive
+            }
+
+            bool isAuthenticated = false;
+            bool isDevelopment = _environment.IsDevelopment();
+
+            if (isDevelopment)
+            {
+                // Development ONLY: Allow local password hash fallback (skip LDAP)
+                if (existingUser != null && !string.IsNullOrEmpty(existingUser.PasswordHash))
+                {
+                    isAuthenticated = VerifyPassword(request.Password, existingUser.PasswordHash);
+                    _logger.LogInformation("User {Email} authenticated via local password hash (Development mode)", request.Email);
+                }
+                else
+                {
+                    // Even in dev, try LDAP if no local hash exists
+                    isAuthenticated = await _ldapAuthService.AuthenticateAsync(request.Email, request.Password);
+                }
             }
             else
             {
-                // Attempt LDAP authentication
+                // UAT & Production: ALWAYS enforce LDAP authentication — no password hash fallback
                 isAuthenticated = await _ldapAuthService.AuthenticateAsync(request.Email, request.Password);
+                _logger.LogInformation("LDAP authentication enforced for {Email} in {Environment} environment",
+                    request.Email, _environment.EnvironmentName);
             }
 
             if (!isAuthenticated)
-                return Result<LoginResponseDto>.Failure("Invalid email or password");
+                return Result<LoginResponseDto>.Failure("اسم المستخدم / كلمة المرور غير صحيحة"); // Invalid username or password
 
-            // Get or create user  
-            var user = existingUser ?? await _userRepository.GetByEmailAsync(request.Email);
-            
+            // Get or create user
+            var user = existingUser;
+
             if (user == null)
             {
-                // Get user details from LDAP
-                var (firstName, lastName, department, personNumber) = await _ldapAuthService.GetUserDetailsAsync(request.Email);
-                
+                // Get user details from LDAP (including mobile number for MFA)
+                var (firstName, lastName, department, personNumber, mobileNumber) =
+                    await _ldapAuthService.GetUserDetailsAsync(request.Email);
+
                 user = new User
                 {
                     Email = request.Email,
@@ -81,6 +106,7 @@ public class AuthService : IAuthService
                     LastName = lastName ?? "",
                     Department = department ?? "",
                     PersonNumber = personNumber ?? "",
+                    MobileNumber = mobileNumber ?? "",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     Role = "User"
@@ -88,6 +114,19 @@ public class AuthService : IAuthService
 
                 user = await _userRepository.AddAsync(user);
                 await _userRepository.SaveChangesAsync();
+                _logger.LogInformation("New user {Email} created from LDAP details", request.Email);
+            }
+            else
+            {
+                // Update LDAP details for existing user (sync on each login like VMS)
+                var (firstName, lastName, department, personNumber, mobileNumber) =
+                    await _ldapAuthService.GetUserDetailsAsync(request.Email);
+
+                if (!string.IsNullOrEmpty(firstName)) user.FirstName = firstName;
+                if (!string.IsNullOrEmpty(lastName)) user.LastName = lastName;
+                if (!string.IsNullOrEmpty(department)) user.Department = department;
+                if (!string.IsNullOrEmpty(personNumber)) user.PersonNumber = personNumber;
+                if (!string.IsNullOrEmpty(mobileNumber)) user.MobileNumber = mobileNumber;
             }
 
             // Update last login
@@ -107,12 +146,12 @@ public class AuthService : IAuthService
                 ExpiresAt = DateTime.UtcNow.AddHours(24)
             };
 
-            _logger.LogInformation($"User {request.Email} logged in successfully");
+            _logger.LogInformation("User {Email} logged in successfully", request.Email);
             return Result<LoginResponseDto>.Success(response);
         }
         catch (Exception ex)
         {
-            _logger.LogError($"Login error: {ex.Message}");
+            _logger.LogError(ex, "Login error for {Email}", request.Email);
             return Result<LoginResponseDto>.Failure("An error occurred during login. Please try again.");
         }
     }
@@ -121,12 +160,12 @@ public class AuthService : IAuthService
     {
         try
         {
-            _logger.LogInformation($"User {userId} logged out");
+            _logger.LogInformation("User {UserId} logged out", userId);
             return await Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            _logger.LogError($"Logout error: {ex.Message}");
+            _logger.LogError(ex, "Logout error for user {UserId}", userId);
             return false;
         }
     }
@@ -151,7 +190,8 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Name, user.FullName),
             new Claim(ClaimTypes.Role, user.Role),
             new Claim("Department", user.Department ?? ""),
-            new Claim("PersonNumber", user.PersonNumber ?? "")
+            new Claim("PersonNumber", user.PersonNumber ?? ""),
+            new Claim(ClaimTypes.MobilePhone, user.MobileNumber ?? "")
         };
 
         var token = new JwtSecurityToken(

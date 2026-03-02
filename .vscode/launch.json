@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "ATT - Development",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/Presentation/Dashboard/bin/Debug/net10.0/Dashboard.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Presentation/Dashboard",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "https://localhost:7071;http://localhost:5274"
+      }
+    },
+    {
+      "name": "ATT - UAT",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/Presentation/Dashboard/bin/Debug/net10.0/Dashboard.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Presentation/Dashboard",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "UAT",
+        "ASPNETCORE_URLS": "https://localhost:7071;http://localhost:5274"
+      }
+    },
+    {
+      "name": "ATT - Production",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/Presentation/Dashboard/bin/Debug/net10.0/Dashboard.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/Presentation/Dashboard",
+      "stopAtEntry": false,
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+      },
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "ASPNETCORE_URLS": "https://localhost:7071;http://localhost:5274"
+      }
+    }
+  ]
+}

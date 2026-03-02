@@ -1,17 +1,26 @@
-# Ignore Visual Studio user-specific and auto-generated files
+# Build output
+**/bin/
+**/obj/
+
+# Visual Studio
 .vs/
 *.suo
-**/obj/
-**/obj/**
-**/bin/
-**/bin/**
-**/Debug/
-**/Debug/**
-**/Debug/**/*.compressed/
-**/.compressed/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build cache
 *.cache
+
+# Compressed files
 *.gz
-*.dll
-*.exe
-*.pdb
-*.json
+*.compressed
+
+# NuGet
+**/packages/
+
+# dotnet tools
+.dotnet/
+
+# User-specific launch settings (optional - remove if you want to share)
+# src/Presentation/Dashboard/Properties/launchSettings.json

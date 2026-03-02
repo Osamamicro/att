@@ -89,9 +89,27 @@ builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 #endregion
 
 var app = builder.Build();
-// Seed the database in development mode
+
+// Development only: auto-migrate and seed database
 if (app.Environment.IsDevelopment())
 {
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        try
+        {
+            logger.LogInformation("Applying pending database migrations (Development)...");
+            await dbContext.Database.MigrateAsync();
+            logger.LogInformation("Database migrations applied successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while applying database migrations.");
+            throw;
+        }
+    }
+
     await Infrastructure.Persistence.DatabaseSeeder.SeedDevelopmentDataAsync(app.Services, app.Environment.EnvironmentName);
 }
 
