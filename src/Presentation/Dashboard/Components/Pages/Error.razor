@@ -1,0 +1,37 @@
+﻿@page "/Error"
+@rendermode InteractiveServer
+@using System.Diagnostics
+
+<PageTitle>Error</PageTitle>
+
+<h1 class="text-danger">خطأ.</h1>
+<h2 class="text-danger">حدث خطأ أثناء معالجة طلبك.</h2>
+
+@if (ShowRequestId)
+{
+    <p>
+        <strong>معرف الطلب:</strong> <code>@RequestId</code>
+    </p>
+}
+
+<h3>وضع التطوير</h3>
+<p>
+    Swapping to <strong>بيئة التطوير</strong> سيعرض معلومات أكثر تفصيلاً عن الخطأ الذي حدث.
+</p>
+<p>
+    <strong>بيئة التطوير لا يجب أن تكون مفعلة للتطبيقات المنشورة.</strong>
+    It can result in displaying sensitive information from exceptions to end users.
+    للتصحيح المحلي، فعل بيئة <strong>التطوير</strong> بواسطة تعيين متغير البيئة <strong>ASPNETCORE_ENVIRONMENT</strong> على <strong>التطوير</strong>
+    وإعادة تاشغيل التطبيق.
+</p>
+
+@code{
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

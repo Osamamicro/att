@@ -1,0 +1,11 @@
+D:\Projects\Attendance\BackEnd\src\Domain\bin\Debug\net10.0\Domain.deps.json
+D:\Projects\Attendance\BackEnd\src\Domain\bin\Debug\net10.0\Domain.dll
+D:\Projects\Attendance\BackEnd\src\Domain\bin\Debug\net10.0\Domain.pdb
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\Domain.AssemblyInfoInputs.cache
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\Domain.AssemblyInfo.cs
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\Domain.csproj.CoreCompileInputs.cache
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\Domain.dll
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\refint\Domain.dll
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\Domain.pdb
+D:\Projects\Attendance\BackEnd\src\Domain\obj\Debug\net10.0\ref\Domain.dll

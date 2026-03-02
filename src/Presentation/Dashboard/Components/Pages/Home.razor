@@ -1,0 +1,912 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject ILogger<Home> Logger
+@inject Application.Service.Nifi.INifiService NifiService
+@inject IConfiguration Configuration
+@using Application.DTOs.Nifi
+
+<PageTitle>Home</PageTitle>
+
+
+    <div class="row g-4">
+        @if (_isLoading)
+        {
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">جاري التحميل...</span>
+                        </div>
+                        <p class="mt-3 text-muted">جاري تحميل البيانات...</p>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (_currentUserInfo != null)
+        {
+        <div class="col-xl-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title mb-1">مرحبا @(_currentUserInfo.FullNameAr.Split(' ').FirstOrDefault() ?? "")</h5>
+                            <p class="text-muted mb-2">@_currentUserInfo.PositionArName</p>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge @GetAttendanceStatusBadge(_currentUserInfo.AttendanceStatus)">
+                                    @(_currentUserInfo.AttendanceStatus == "Present" ? "حاضر اليوم" : "غائب اليوم")
+                                </span>
+                                <span class="badge bg-label-info">الوردية: @_currentUserInfo.ShiftName</span>
+                            </div>
+                        </div>
+                        <div class="d-none d-md-block">
+                            <img src="/assets/img/card-advance-sale.png" height="120" alt="مرحبا">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="col-xl-8 col-md-12">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="card-title mb-0">سجل الحضور والانصراف</h5>
+                    <small class="text-body-secondary">تم التحديث اليوم</small>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-lg-3">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-label-primary p-2"><i class="ti ti-clock"></i></span>
+                                    <small class="text-muted">ساعات العمل</small>
+                                </div>
+                                <div class="fs-4 fw-bold">@(_currentUserInfo?.Inside ?? "--:--")</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-label-warning p-2"><i class="ti ti-alert-triangle"></i></span>
+                                    <small class="text-muted">التأخير</small>
+                                </div>
+                                <div class="fs-4 fw-bold">@(_currentUserInfo?.Late ?? "--:--")</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-label-danger p-2"><i class="ti ti-arrow-down"></i></span>
+                                    <small class="text-muted">الخروج المبكر</small>
+                                </div>
+                                <div class="fs-4 fw-bold">@(_currentUserInfo?.Early ?? "--:--")</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge bg-label-success p-2"><i class="ti ti-wallet"></i></span>
+                                    <small class="text-muted">الرصيد اليومي</small>
+                                </div>
+                                <div class="fs-4 fw-bold">@(_currentUserInfo?.BalanceActualRequired ?? "--:--")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!--/ Statistics -->
+
+        }
+        else
+        {
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="ti ti-alert-circle" style="font-size: 48px; color: #666;"></i>
+                        <p class="mt-3 text-muted">لا توجد بيانات متاحة</p>
+                        @if (!string.IsNullOrWhiteSpace(_personNumber))
+                        {
+                            <div class="alert alert-info mt-3">
+                                <strong>معلومات التشخيص:</strong><br/>
+                                الرقم الوظيفي المسترجع: <strong>@_personNumber</strong><br/>
+                                عدد السجلات المسترجعة: <strong>@_attendanceRecords.Count</strong><br/>
+                                التاريخ المطلوب: <strong>@DateTime.Today.ToString("yyyy-MM-dd")</strong>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mt-3">
+                                <strong>تحذير:</strong> لم يتم العثور على الرقم الوظيفي في المتصفح.<br/>
+                                يرجى تسجيل الخروج والدخول مرة أخرى.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="col-xxl-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+                    <div>
+                        <h5 class="card-title mb-1">سجل المعاملات</h5>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs nav-justified" id="transactionTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="account-tab" data-bs-toggle="tab" data-bs-target="#account" type="button" role="tab" aria-controls="account" aria-selected="true">
+                                <i class="ti ti-user me-2"></i>عرض بيانات الحساب
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button" role="tab" aria-controls="attendance" aria-selected="false">
+                                <i class="ti ti-clock me-2"></i>سجل الحضور والانصراف
+                            </button>
+                        </li>
+                        @if (IsCurrentUserDepartmentManager())
+                        {
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="employees-tab" data-bs-toggle="tab" data-bs-target="#employees" type="button" role="tab" aria-controls="employees" aria-selected="false">
+                                    <i class="ti ti-users me-2"></i>الموظفين
+                                </button>
+                            </li>
+                        }
+                    </ul>
+
+                    <!-- Tab content -->
+                    <div class="tab-content" id="transactionTabsContent">
+                        <!-- Account Info Tab -->
+                        <div class="tab-pane fade show active" id="account" role="tabpanel" aria-labelledby="account-tab">
+                            <div class="mt-3">
+                                @if (_isLoading)
+                                {
+                                    <div class="d-flex flex-column align-items-center justify-content-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">جاري التحميل...</span>
+                                        </div>
+                                        <small class="text-muted mt-3">جاري تحميل بيانات الحساب...</small>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-borderless table-sm align-middle">
+                                            <tbody>
+                                                <tr>
+                                                    <td><strong>الرقم الوظيفي:</strong></td>
+                                                    <td>@(_currentUserInfo?.PersonNumber ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>الإسم الكامل:</strong></td>
+                                                    <td>@(_currentUserInfo?.FullNameAr ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>المنصب:</strong></td>
+                                                    <td>@(_currentUserInfo?.PositionArName ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>القطاع:</strong></td>
+                                                    <td>@(_currentUserInfo?.SectorArName ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>الإدارة العامة:</strong></td>
+                                                    <td>@(_currentUserInfo?.GeneralDepartmentArName ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>الإدارة:</strong></td>
+                                                    <td>@(_currentUserInfo?.DepartmentArName ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>القسم:</strong></td>
+                                                    <td>@(_currentUserInfo?.SectionArName ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>الموقع:</strong></td>
+                                                    <td>@(_currentUserInfo?.LocationNameAr ?? "--")</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>مدير قسم:</strong></td>
+                                                    <td>
+                                                        @if (_currentUserInfo is not null &&
+                                                            (string.Equals(_currentUserInfo.IsDepartmentManager, "Yes", StringComparison.OrdinalIgnoreCase)
+                                                             || string.Equals(_currentUserInfo.IsDepartmentManager, "True", StringComparison.OrdinalIgnoreCase)
+                                                             || _currentUserInfo.IsDepartmentManager == "1"))
+                                                        {
+                                                            <span class="badge bg-success">نعم</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary">لا</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Attendance Tab -->
+                        <div class="tab-pane fade" id="attendance" role="tabpanel" aria-labelledby="attendance-tab">
+                            <div class="mt-3">
+                                <!-- Filter Card -->
+                                <div class="card border-0 bg-light mb-3">
+                                    <div class="card-body py-3">
+                                        <div class="row g-3 align-items-end">
+                                            <div class="col-12 col-md-3">
+                                                <label class="form-label">من تاريخ</label>
+                                                <input type="date" class="form-control" value="@_filterStartDate" @onchange="@((ChangeEventArgs e) => _filterStartDate = e.Value?.ToString() ?? string.Empty)" />
+                                            </div>
+                                            <div class="col-12 col-md-3">
+                                                <label class="form-label">إلى تاريخ</label>
+                                                <input type="date" class="form-control" value="@_filterEndDate" @onchange="@((ChangeEventArgs e) => _filterEndDate = e.Value?.ToString() ?? string.Empty)" />
+                                            </div>
+                                            <div class="col-12 col-md-6 d-flex gap-2">
+                                                <button class="btn btn-primary flex-grow-1" @onclick="ApplyDateFilterAsync">
+                                                    <i class="ti ti-search me-1"></i>بحث
+                                                </button>
+                                                <button class="btn btn-outline-secondary flex-grow-1" @onclick="ResetDateFilter">
+                                                    <i class="ti ti-x me-1"></i>مسح
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted d-block mt-2">اختر فترة زمنية لعرض السجل ضمنها. (الافتراضي: من بداية الشهر الماضي إلى اليوم)</small>
+                                    </div>
+                                </div>
+
+                                <!-- Table -->
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover table-sm align-middle text-nowrap">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>التاريخ</th>
+                                                <th>أول دخول</th>
+                                                <th>آخر خروج</th>
+                                                <th>التأخير</th>
+                                                <th>الخروج المبكر</th>
+                                                <th>الرصيد</th>
+                                                <th>الحالة</th>
+                                                <th>نوع الغياب</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if (_filteredAttendanceRecords.Count == 0)
+                                            {
+                                                <tr>
+                                                    <td colspan="8" class="text-center text-muted">لا توجد بيانات حضور للفترة المحددة</td>
+                                                </tr>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var record in _filteredAttendanceRecords)
+                                                {
+                                                    <tr>
+                                                        <td>@record.WorkDate</td>
+                                                        <td>@record.FirstIn</td>
+                                                        <td>@record.LastOut</td>
+                                                        <td>@record.Late</td>
+                                                        <td>@record.Early</td>
+                                                        <td>
+                                                            <span class="badge @GetBalanceBadge(record.BalanceActualRequired)">
+                                                                 @record.BalanceActualRequired
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge @GetAttendanceStatusBadge(record.AttendanceStatus)">
+                                                                @(record.AttendanceStatus == "Present" ? "حاضر" : "غائب")
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            @if (string.IsNullOrWhiteSpace(record.AbsenceType))
+                                                            {
+                                                                <span class="badge bg-secondary">لا يوجد</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>@record.AbsenceType</span>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Employees Tab -->
+                        @if (IsCurrentUserDepartmentManager())
+                        {
+                            <div class="tab-pane fade" id="employees" role="tabpanel" aria-labelledby="employees-tab">
+                                <div class="mt-3">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th>الرقم الوظيفي</th>
+                                                    <th>اسم الموظف</th>
+                                                    <th>المنصب</th>
+                                                    <th>الوردية</th>
+                                                    <th>الحالة</th>
+                                                    <th>نوع الغياب</th>
+                                                    <th>عرض سجل الحضور و الإنصراف</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @if (_sectionEmployees.Count == 0)
+                                                {
+                                                    <tr>
+                                                        <td colspan="7" class="text-center text-muted">لا توجد بيانات موظفين للقسم اليوم</td>
+                                                    </tr>
+                                                }
+                                                else
+                                                {
+                                                    @foreach (var employee in _sectionEmployees)
+                                                    {
+                                                        <tr>
+                                                            <td>@employee.PersonNumber</td>
+                                                            <td>@employee.FullNameAr</td>
+                                                            <td>@employee.PositionArName</td>
+                                                            <td>@employee.ShiftName</td>
+                                                            <td>
+                                                                <span class="badge @GetAttendanceStatusBadge(employee.AttendanceStatus)">
+                                                                    @(employee.AttendanceStatus == "Present" ? "حاضر" : employee.AttendanceStatus)
+                                                                </span>
+                                                            </td>
+                                                            <td>@(string.IsNullOrWhiteSpace(employee.AbsenceType) ? "—" : employee.AbsenceType)</td>
+                                                            <td>
+                                                                <button class="btn btn-sm btn-outline-primary"
+                                                                        data-bs-toggle="modal"
+                                                                        data-bs-target="#attendanceModal"
+                                                                        @onclick="@(async () => await OpenAttendanceModalAsync(employee))">
+                                                                    <i class="ti ti-eye me-1"></i>عرض
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="attendanceModal" tabindex="-1" aria-labelledby="attendanceModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="attendanceModalLabel" style=" margin-right: 35px; ">
+                            سجل الحضور والانصراف
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (_isLoadingModal)
+                        {
+                            <div class="d-flex flex-column align-items-center justify-content-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">جاري التحميل...</span>
+                                </div>
+                                <small class="text-muted mt-3">جاري تحميل بيانات الموظف...</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge bg-label-primary">الموظف: @SelectedEmployee?.FullNameAr</span>
+                                <span class="badge bg-label-secondary">الوظيفة: @SelectedEmployee?.PositionArName</span>
+                                <span class="badge bg-label-info">الوردية: @SelectedEmployee?.ShiftName</span>
+                            </div>
+
+                        <div class="card border-0 bg-light mb-3">
+                            <div class="card-body py-3">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">من تاريخ</label>
+                                        <input type="date" class="form-control" value="@_modalFilterStartDate" @onchange="@((ChangeEventArgs e) => _modalFilterStartDate = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <div class="col-12 col-md-4">
+                                        <label class="form-label">إلى تاريخ</label>
+                                        <input type="date" class="form-control" value="@_modalFilterEndDate" @onchange="@((ChangeEventArgs e) => _modalFilterEndDate = e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                    <div class="col-12 col-md-4 d-flex gap-2">
+                                        <button class="btn btn-primary flex-grow-1" @onclick="ApplyModalDateFilterAsync">
+                                            <i class="ti ti-search me-1"></i>بحث
+                                        </button>
+                                        <button class="btn btn-outline-secondary flex-grow-1" @onclick="ResetModalDateFilter">
+                                            <i class="ti ti-x me-1"></i>مسح
+                                        </button>
+                                    </div>
+                                </div>
+                                <small class="text-muted d-block mt-2">اختر فترة زمنية لعرض السجل ضمنها.</small>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-sm align-middle text-nowrap">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>التاريخ</th>
+                                        <th>أول دخول</th>
+                                        <th>آخر خروج</th>
+                                        <th>التأخير</th>
+                                        <th>الخروج المبكر</th>
+                                        <th>الرصيد</th>
+                                        <th>الحالة</th>
+                                        <th>نوع الغياب</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (SelectedAttendance.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">لا توجد بيانات</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in SelectedAttendance)
+                                        {
+                                            <tr>
+                                                <td>@row.WorkDate</td>
+                                                <td>@row.FirstIn</td>
+                                                <td>@row.LastOut</td>
+                                                <td>@row.Late</td>
+                                                <td>@row.Early</td>
+                                                <td>
+                                                    <span class="badge @GetBalanceBadge(row.BalanceActualRequired)">
+                                                        @row.BalanceActualRequired
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @GetAttendanceStatusBadge(row.AttendanceStatus)">
+                                                        @(row.AttendanceStatus == "Present" ? "حاضر" : row.AttendanceStatus)
+                                                    </span>
+                                                </td>
+                                                <td>@(string.IsNullOrWhiteSpace(row.AbsenceType) ? "لا يوجد" : row.AbsenceType)</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+@code {
+    private bool _checkedAuthentication;
+    private bool _isLoading = true;
+    private string _personNumber = string.Empty;
+    private List<NifiAttendanceRecordDto> _attendanceRecords = new();
+    private List<NifiAttendanceRecordDto> _filteredAttendanceRecords = new();
+    private List<NifiAttendanceRecordDto> _sectionEmployees = new();
+    private NifiAttendanceRecordDto? _currentUserInfo;
+    
+    // Date filter variables
+    private string _filterStartDate = string.Empty;
+    private string _filterEndDate = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _checkedAuthentication)
+        {
+            return;
+        }
+
+        _checkedAuthentication = true;
+        try
+        {
+            var token = await JSRuntime.InvokeAsync<string>("authStorage.getAuthToken");
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                NavigationManager.NavigateTo("/login", true);
+                return;
+            }
+
+            _personNumber = await JSRuntime.InvokeAsync<string>("authStorage.getPersonNumber");
+            
+            Logger.LogInformation("Retrieved person_number from storage: '{PersonNumber}'", _personNumber);
+            
+            if (!string.IsNullOrWhiteSpace(_personNumber))
+            {
+                await LoadAttendanceDataAsync();
+            }
+            else
+            {
+                Logger.LogWarning("Person number is empty or null. Cannot load attendance data.");
+                _isLoading = false;
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to read auth token from browser storage. Redirecting to login.");
+            NavigationManager.NavigateTo("/login", true);
+        }
+    }
+
+    private async Task LoadAttendanceDataAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            var today = DateTime.Today;
+            
+            // Calculate start date: first day of last month
+            var startOfLastMonth = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+            
+            Logger.LogInformation("Calling NIFI API (range) for person {PersonNumber}, date range: {StartDate} to {EndDate}", 
+                _personNumber, startOfLastMonth.ToString("yyyy-MM-dd"), today.ToString("yyyy-MM-dd"));
+
+            Logger.LogInformation("Calling NIFI API (today) for person {PersonNumber}, date: {Date}",
+                _personNumber, today.ToString("yyyy-MM-dd"));
+
+            var nifiBaseUrl = Configuration["integration:NIFI:BaseUrl"] ?? string.Empty;
+            var requestTimestampRange = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var fullRangeRequestUrl = string.IsNullOrWhiteSpace(nifiBaseUrl)
+                ? string.Empty
+                : $"{nifiBaseUrl}?calendar_start={startOfLastMonth:yyyy-MM-dd}&calendar_end={today:yyyy-MM-dd}&emp={Uri.EscapeDataString(_personNumber)}&_ts={requestTimestampRange}";
+
+            var requestTimestampToday = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var fullTodayRequestUrl = string.IsNullOrWhiteSpace(nifiBaseUrl)
+                ? string.Empty
+                : $"{nifiBaseUrl}?calendar_start={today:yyyy-MM-dd}&calendar_end={today:yyyy-MM-dd}&emp={Uri.EscapeDataString(_personNumber)}&_ts={requestTimestampToday}";
+
+            var fullSectionRequestUrl = string.Empty;
+            
+            _attendanceRecords = await NifiService.GetAttendanceRecordsAsync(
+                _personNumber, 
+                startOfLastMonth, 
+                today);
+
+            var todayRecords = await NifiService.GetAttendanceRecordsAsync(
+                _personNumber,
+                today,
+                today);
+            
+            _currentUserInfo = todayRecords.FirstOrDefault();
+
+            if (IsCurrentUserDepartmentManager() && !string.IsNullOrWhiteSpace(_currentUserInfo?.SectionArName))
+            {
+                _sectionEmployees = await NifiService.GetSectionAttendanceRecordsAsync(
+                    _currentUserInfo.SectionArName, 
+                    today, 
+                    today, 
+                    _currentUserInfo.PersonNumber);
+                _sectionEmployees = _sectionEmployees
+                    .Where(employee => !string.Equals(
+                        employee.PersonNumber?.Trim(),
+                        _personNumber.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                var requestTimestampSection = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                fullSectionRequestUrl = string.IsNullOrWhiteSpace(nifiBaseUrl)
+                    ? string.Empty
+                    : $"{nifiBaseUrl}?calendar_start={today:yyyy-MM-dd}&calendar_end={today:yyyy-MM-dd}&sec={Uri.EscapeDataString(_currentUserInfo.SectionArName)}&_ts={requestTimestampSection}";
+            }
+            else
+            {
+                _sectionEmployees = new List<NifiAttendanceRecordDto>();
+            }
+            
+            if (_currentUserInfo == null)
+            {
+                Logger.LogWarning("NIFI API (today) returned 0 records for person {PersonNumber} on {Date}",
+                    _personNumber, today.ToString("yyyy-MM-dd"));
+            }
+            
+            // Initialize filter dates
+            _filterStartDate = startOfLastMonth.ToString("yyyy-MM-dd");
+            _filterEndDate = today.ToString("yyyy-MM-dd");
+            
+            // Apply initial filter
+            ApplyFilter();
+            
+            if (_attendanceRecords.Count == 0)
+            {
+                Logger.LogWarning("NIFI API returned 0 records for person {PersonNumber} from {StartDate} to {EndDate}", 
+                    _personNumber, startOfLastMonth.ToString("yyyy-MM-dd"), today.ToString("yyyy-MM-dd"));
+            }
+            else
+            {
+                Logger.LogInformation("Loaded {Count} attendance records for person {PersonNumber}. First record: {FullName}", 
+                    _attendanceRecords.Count, _personNumber, _currentUserInfo?.FullNameAr ?? "N/A");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading attendance data for person {PersonNumber}", _personNumber);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_filterStartDate) || string.IsNullOrWhiteSpace(_filterEndDate))
+            {
+                _filteredAttendanceRecords = _attendanceRecords.ToList();
+                return;
+            }
+
+            if (!DateTime.TryParse(_filterStartDate, out var startDate) || 
+                !DateTime.TryParse(_filterEndDate, out var endDate))
+            {
+                _filteredAttendanceRecords = _attendanceRecords.ToList();
+                return;
+            }
+
+            _filteredAttendanceRecords = _attendanceRecords
+                .Where(r => 
+                {
+                    if (!DateTime.TryParse(r.WorkDate, out var workDate))
+                        return false;
+                    
+                    return workDate >= startDate && workDate <= endDate;
+                })
+                .ToList();
+
+            Logger.LogInformation("Applied date filter: {StartDate} to {EndDate}. Filtered {FilteredCount} records from {TotalCount} total",
+                startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"), 
+                _filteredAttendanceRecords.Count, _attendanceRecords.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error applying filter");
+            _filteredAttendanceRecords = _attendanceRecords.ToList();
+        }
+    }
+
+    private async Task ApplyDateFilterAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_filterStartDate) || string.IsNullOrWhiteSpace(_filterEndDate))
+            {
+                Logger.LogWarning("Invalid date filter: start or end date is empty");
+                return;
+            }
+
+            if (!DateTime.TryParse(_filterStartDate, out var startDate) || 
+                !DateTime.TryParse(_filterEndDate, out var endDate))
+            {
+                Logger.LogWarning("Invalid date format in filter");
+                return;
+            }
+
+            if (endDate < startDate)
+            {
+                Logger.LogWarning("End date cannot be before start date");
+                return;
+            }
+
+            ApplyFilter();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error applying date filter");
+        }
+    }
+
+    private void ResetDateFilter()
+    {
+        try
+        {
+            var today = DateTime.Today;
+            var startOfLastMonth = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+            
+            _filterStartDate = startOfLastMonth.ToString("yyyy-MM-dd");
+            _filterEndDate = today.ToString("yyyy-MM-dd");
+            
+            ApplyFilter();
+            StateHasChanged();
+            
+            Logger.LogInformation("Date filter reset to defaults");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error resetting date filter");
+        }
+    }
+
+    private string GetAttendanceStatusBadge(string? status)
+    {
+        return status?.ToLower() switch
+        {
+            "present" => "bg-success",
+            "absent" => "bg-danger",
+            "late" => "bg-warning",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetBalanceBadge(string? balance)
+    {
+        if (string.IsNullOrWhiteSpace(balance)) return "bg-secondary";
+        
+        return balance.StartsWith("-") ? "bg-danger" : "bg-success";
+    }
+
+    private NifiAttendanceRecordDto? SelectedEmployee;
+    private List<NifiAttendanceRecordDto> SelectedAttendance = new();
+    private List<NifiAttendanceRecordDto> _allSelectedEmployeeAttendance = new();
+    
+    // Modal filter variables
+    private string _modalFilterStartDate = string.Empty;
+    private string _modalFilterEndDate = string.Empty;
+    private bool _isLoadingModal = false;
+
+    private bool IsCurrentUserDepartmentManager()
+    {
+        if (_currentUserInfo == null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(_currentUserInfo.IsDepartmentManager))
+            return false;
+
+        var value = _currentUserInfo.IsDepartmentManager.Trim().ToLowerInvariant();
+        
+        // Check if true values
+        return value == "yes" 
+            || value == "true" 
+            || value == "1"
+            || value == "y";
+    }
+
+    private async Task OpenAttendanceModalAsync(NifiAttendanceRecordDto employee)
+    {
+        try
+        {
+            _isLoadingModal = true;
+            SelectedEmployee = employee;
+            StateHasChanged();
+            
+            var today = DateTime.Today;
+            var startOfLastMonth = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+            
+            Logger.LogInformation("Loading attendance records for employee {PersonNumber}", employee.PersonNumber);
+            
+            _allSelectedEmployeeAttendance = await NifiService.GetAttendanceRecordsAsync(
+                employee.PersonNumber,
+                startOfLastMonth,
+                today);
+            
+            Logger.LogInformation("Loaded {Count} attendance records for employee {PersonNumber}", 
+                _allSelectedEmployeeAttendance.Count, employee.PersonNumber);
+            
+            // Initialize modal filter dates
+            _modalFilterStartDate = startOfLastMonth.ToString("yyyy-MM-dd");
+            _modalFilterEndDate = today.ToString("yyyy-MM-dd");
+            
+            // Apply initial filter
+            ApplyModalFilter();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading attendance records for employee {PersonNumber}", employee.PersonNumber);
+            _allSelectedEmployeeAttendance = new List<NifiAttendanceRecordDto>();
+            SelectedAttendance = new List<NifiAttendanceRecordDto>();
+        }
+        finally
+        {
+            _isLoadingModal = false;
+        }
+    }
+    
+    private void ApplyModalFilter()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_modalFilterStartDate) || string.IsNullOrWhiteSpace(_modalFilterEndDate))
+            {
+                SelectedAttendance = _allSelectedEmployeeAttendance.OrderByDescending(x => x.WorkDate).ToList();
+                return;
+            }
+
+            if (!DateTime.TryParse(_modalFilterStartDate, out var startDate) || 
+                !DateTime.TryParse(_modalFilterEndDate, out var endDate))
+            {
+                SelectedAttendance = _allSelectedEmployeeAttendance.OrderByDescending(x => x.WorkDate).ToList();
+                return;
+            }
+
+            SelectedAttendance = _allSelectedEmployeeAttendance
+                .Where(r => 
+                {
+                    if (!DateTime.TryParse(r.WorkDate, out var workDate))
+                        return false;
+                    
+                    return workDate >= startDate && workDate <= endDate;
+                })
+                .OrderByDescending(x => x.WorkDate)
+                .ToList();
+
+            Logger.LogInformation("Applied modal date filter: {StartDate} to {EndDate}. Filtered {FilteredCount} records from {TotalCount} total",
+                startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"), 
+                SelectedAttendance.Count, _allSelectedEmployeeAttendance.Count);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error applying modal filter");
+            SelectedAttendance = _allSelectedEmployeeAttendance.OrderByDescending(x => x.WorkDate).ToList();
+        }
+    }
+    
+    private async Task ApplyModalDateFilterAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_modalFilterStartDate) || string.IsNullOrWhiteSpace(_modalFilterEndDate))
+            {
+                Logger.LogWarning("Invalid modal date filter: start or end date is empty");
+                return;
+            }
+
+            if (!DateTime.TryParse(_modalFilterStartDate, out var startDate) || 
+                !DateTime.TryParse(_modalFilterEndDate, out var endDate))
+            {
+                Logger.LogWarning("Invalid date format in modal filter");
+                return;
+            }
+
+            if (endDate < startDate)
+            {
+                Logger.LogWarning("End date cannot be before start date");
+                return;
+            }
+
+            ApplyModalFilter();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error applying modal date filter");
+        }
+    }
+    
+    private void ResetModalDateFilter()
+    {
+        try
+        {
+            var today = DateTime.Today;
+            var startOfLastMonth = new DateTime(today.Year, today.Month, 1).AddMonths(-1);
+            
+            _modalFilterStartDate = startOfLastMonth.ToString("yyyy-MM-dd");
+            _modalFilterEndDate = today.ToString("yyyy-MM-dd");
+            
+            ApplyModalFilter();
+            StateHasChanged();
+            
+            Logger.LogInformation("Modal date filter reset to defaults");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error resetting modal date filter");
+        }
+    }
+
+
+}

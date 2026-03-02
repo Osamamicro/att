@@ -1,0 +1,343 @@
+﻿@page "/login"
+@layout Dashboard.Components.Layout.LoginLayout
+@rendermode InteractiveServer
+@using Application.DTOs.Auth
+@using System.Net.Http.Json
+
+@inject NavigationManager NavigationManager
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JSRuntime
+@inject ILogger<Login> Logger
+@inject IWebHostEnvironment Environment
+
+<div class="authentication-wrapper authentication-basic container-p-y">
+    <div class="authentication-inner py-4">
+        <div class="card p-md-7 p-1">
+            <div class="card-body">
+                <!-- Logo -->
+                <div class="app-brand justify-content-center" style="line-height: 2 !important;">
+                    <span class="app-brand-text demo text-heading fw-bold">سجل الحضور و الإنصراف</span>
+                </div>
+
+                <!-- Login Form -->
+                <h4 class="mb-1 pt-2">مرحبًا! 👋</h4>
+                <p class="mb-4">يرجى تسجيل الدخول إلى حسابك</p>
+                @if (Environment.IsDevelopment())
+                {
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        <strong>وضع التطوير</strong><br/>
+                        بيانات الاعتماد الافتراضية:<br/>
+                        البريد الإلكتروني: <strong>admin@admin.com</strong><br/>
+                        كلمة المرور: <strong>123456</strong>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                }
+
+
+                <EditForm EditContext="editContext" FormName="loginForm" class="mb-3">
+                    <DataAnnotationsValidator />
+
+                    <!-- Email Field -->
+                    <div class="mb-3">
+                        <label class="form-label" for="email">البريد الإلكتروني</label>
+                        <InputText 
+                            id="email" 
+                            class="@($"form-control {GetFieldClass("Email")}")" 
+                            placeholder="أدخل بريدك الإلكتروني" 
+                            @bind-Value="loginModel.Email"
+                            type="email" />
+                        <div class="invalid-feedback d-block">
+                            <ValidationMessage For="@(() => loginModel.Email)" />
+                        </div>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="mb-2">
+                        <label class="form-label" for="password">كلمة المرور</label>
+                        <InputText 
+                            id="password" 
+                            class="@($"form-control {GetFieldClass("Password")}")" 
+                            placeholder="أدخل كلمة المرور الخاصة بك" 
+                            @bind-Value="loginModel.Password"
+                            type="password" />
+                        <div class="invalid-feedback d-block">
+                            <ValidationMessage For="@(() => loginModel.Password)" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="captchaInput">التحقق الأمني</label>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-label-secondary fs-6 px-3 py-2">@CaptchaQuestion</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="GenerateCaptcha" aria-label="Refresh captcha">
+                                <i class="ti ti-refresh"></i>
+                            </button>
+                        </div>
+                        <input
+                            id="captchaInput"
+                            class="form-control"
+                            placeholder="أدخل النتيجة"
+                            @bind="captchaInput"
+                            @bind:event="oninput" />
+                    </div>
+
+                    <!-- Error Message -->
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="menu-icon tf-icons bx bx-exclamation-circle"></i>
+                            <span class="ms-2">@errorMessage</span>
+                            <button type="button" class="btn-close" @onclick="() => errorMessage = null"></button>
+                        </div>
+                    }
+
+                    <!-- Loading State -->
+                    @if (isLoading)
+                    {
+                        <div class="alert alert-info" role="alert">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">جارٍ التحميل...</span>
+                            </div>
+                            جاري المصادقة...
+                        </div>
+                    }
+
+                    <!-- Submit Button -->
+                    <button type="button" class="btn btn-primary d-grid w-100" disabled="@isLoading" @onclick="HandleLogin">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>جارٍ تسجيل الدخول...</span>
+                        }
+                        else
+                        {
+                            <span>تسجيل الدخول</span>
+                        }
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .authentication-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+    }
+
+    .authentication-inner {
+        width: 100%;
+        max-width: 400px;
+    }
+
+    .card {
+        border-radius: 0.5rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .app-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+
+    .form-control:focus {
+        border-color: #696cff;
+        box-shadow: 0 0 0 0.2rem rgba(105, 108, 255, 0.25);
+    }
+
+    .invalid-feedback {
+        color: #dc3545;
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+    }
+
+    .spinner-border-sm {
+        width: 1rem;
+        height: 1rem;
+        border-width: 0.2em;
+    }
+</style>
+
+@code {
+    private LoginRequestDto loginModel = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+    private EditContext? editContext;
+    private int captchaLeft;
+    private int captchaRight;
+    private string captchaInput = string.Empty;
+
+    private string CaptchaQuestion => $"{captchaLeft} + {captchaRight} = ?";
+
+    protected override void OnInitialized()
+    {
+        editContext = new EditContext(loginModel);
+        GenerateCaptcha();
+
+            // Auto-fill credentials in development mode
+            if (Environment.IsDevelopment())
+            {
+                loginModel.Email = "admin@admin.com";
+                loginModel.Password = "123456";
+                loginModel.RememberMe = true;
+            }
+    }
+
+    private async Task HandleLogin()
+    {
+        if (editContext == null || !editContext.Validate())
+        {
+            return;
+        }
+
+        if (!IsCaptchaValid())
+        {
+            errorMessage = "فشل التحقق الأمني. يرجى المحاولة مرة أخرى.";
+            GenerateCaptcha();
+            captchaInput = string.Empty;
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+
+            var http = HttpClientFactory.CreateClient();
+            http.BaseAddress = new Uri(NavigationManager.BaseUri);
+
+            var response = await http.PostAsJsonAsync("api/auth/login", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<LoginResponseDto>();
+
+                if (string.IsNullOrWhiteSpace(result?.Token))
+                {
+                    errorMessage = "تم تسجيل الدخول لكن لم يتم استلام رمز التحقق. حاول مرة أخرى.";
+                    Logger.LogError("Login succeeded but token was empty for user: {Email}", loginModel.Email);
+                    return;
+                }
+
+                var storedInLocal = await JSRuntime.InvokeAsync<bool>("authStorage.setAuthToken", result.Token);
+                if (!storedInLocal)
+                {
+                    await JSRuntime.InvokeAsync<bool>("authStorage.setAuthTokenSession", result.Token);
+                }
+
+                // Store PersonNumber from login response or use default for development
+                var personNumberToStore = !string.IsNullOrWhiteSpace(result?.PersonNumber) 
+                    ? result.PersonNumber 
+                    : (Environment.IsDevelopment() ? "10563" : "");
+
+                if (!string.IsNullOrWhiteSpace(personNumberToStore))
+                {
+                    await JSRuntime.InvokeAsync<bool>("authStorage.setPersonNumber", personNumberToStore);
+                }
+
+                var confirmedToken = await JSRuntime.InvokeAsync<string>("authStorage.getAuthToken");
+
+                if (string.IsNullOrWhiteSpace(confirmedToken))
+                {
+                    errorMessage = "تم تسجيل الدخول لكن تعذر حفظ جلسة المستخدم على المتصفح.";
+                    Logger.LogError("Token storage failed for user: {Email}", loginModel.Email);
+                    return;
+                }
+                
+                // Redirect to dashboard
+                NavigationManager.NavigateTo("/");
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى.";
+                Logger.LogWarning($"Login failed for user: {loginModel.Email}");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                errorMessage = "حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى لاحقًا.";
+                Logger.LogError($"Login error: {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "حدث خطأ في الاتصال. يرجى التحقق من اتصالك بالإنترنت.";
+            Logger.LogError($"Login exception: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GenerateCaptcha()
+    {
+        captchaLeft = Random.Shared.Next(1, 10);
+        captchaRight = Random.Shared.Next(1, 10);
+    }
+
+    private bool IsCaptchaValid()
+    {
+        var normalizedInput = NormalizeDigits(captchaInput).Trim();
+
+        if (!int.TryParse(normalizedInput, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value))
+        {
+            return false;
+        }
+
+        return value == (captchaLeft + captchaRight);
+    }
+
+    private static string NormalizeDigits(string? input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return string.Empty;
+        }
+
+        var normalized = new System.Text.StringBuilder(input.Length);
+
+        foreach (var character in input)
+        {
+            if (character >= '٠' && character <= '٩')
+            {
+                normalized.Append((char)('0' + (character - '٠')));
+            }
+            else if (character >= '۰' && character <= '۹')
+            {
+                normalized.Append((char)('0' + (character - '۰')));
+            }
+            else
+            {
+                normalized.Append(character);
+            }
+        }
+
+        return normalized.ToString();
+    }
+
+    private string GetFieldClass(string fieldName)
+    {
+        if (editContext == null)
+            return "";
+
+        var field = editContext.Field(fieldName);
+        var isInvalid = editContext.GetValidationMessages(field).Any();
+        var isTouched = editContext.IsModified(field);
+
+        return isTouched && isInvalid ? "is-invalid" : "";
+    }
+}
