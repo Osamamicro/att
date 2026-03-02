@@ -22,5 +22,15 @@
 # dotnet tools
 .dotnet/
 
-# User-specific launch settings (optional - remove if you want to share)
-# src/Presentation/Dashboard/Properties/launchSettings.json
+# Ignore Rider project files
+.idea/
+
+# Visual Studio Code settings
+.vscode/
+
+# Test results
+TestResults/
+
+# Remove any global ignores for *.dll, *.pdb, *.json (do NOT add these here)
+# If you need to keep appsettings.json, ensure it's not ignored
+# !appsettings.json
